@@ -1,0 +1,7 @@
+{
+  "name": "frontend",
+  "private": true,
+  "scripts": {
+    "start": "cd /app && NODE_OPTIONS=--openssl-legacy-provider yarn serve"
+  }
+}

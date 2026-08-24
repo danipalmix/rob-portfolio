@@ -7,7 +7,7 @@
         </span>
       </button>
       <div class="social-buttons-header">
-        <a href="https://linktr.ee/RoPhil?utm_source=linktree_profile_share&ltsid=16a78eb9-31a8-49b6-80f3-5c1882fe01f5" target="_blank" rel="noopener noreferrer" aria-label="Linktree">
+        <a href="https://linktr.ee/RoPhil?utm_source=linktree_profile_share&ltsid=rophil-portfolio-fix" target="_blank" rel="noopener noreferrer" aria-label="Linktree">
           <v-icon class="white-icon">mdi-link-variant</v-icon>
         </a>
         <a href="https://www.instagram.com/rophil.art" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
@@ -27,7 +27,8 @@
         :aria-expanded="String(navOpen)"
         aria-label="Apri o chiudi menu"
       >
-        <v-icon class="menu-button-icon">{{ navOpen ? 'mdi-close' : 'mdi-menu' }}</v-icon>
+        <v-icon v-if="navOpen" class="menu-button-icon">mdi-close</v-icon>
+        <img v-else src="../assets/hamburger_custom.png" alt="" aria-hidden="true" class="menu-button-img" />
       </button>
     </header>
 
@@ -45,7 +46,7 @@
       </nav>
       <div class="social-buttons">
         <a href="https://www.instagram.com/rophil.art" target="_blank"><v-icon>mdi-instagram</v-icon></a>
-        <a href="https://linktr.ee/RoPhil?utm_source=linktree_profile_share&ltsid=16a78eb9-31a8-49b6-80f3-5c1882fe01f5" target="_blank"><v-icon>mdi-link-variant</v-icon></a>
+        <a href="https://linktr.ee/RoPhil?utm_source=linktree_profile_share&ltsid=rophil-portfolio-fix" target="_blank"><v-icon>mdi-link-variant</v-icon></a>
         <a href="https://www.linkedin.com/in/rophil/" target="_blank"><v-icon>mdi-linkedin</v-icon></a>
         <a href="mailto:rophil.art@gmail.com" target="_blank"><v-icon class="white-icon">mdi-gmail</v-icon></a>
       </div>
@@ -68,7 +69,13 @@
             </button>
           </div>
           <div v-if="visibleSubcategories.length" class="filter-bar filter-bar-sub">
-            <button class="back-button" @click="selectFilter(activeMainFilter)" :title="`Tutto in ${activeMainFilter.name}`">
+            <button
+              class="back-button"
+              :class="{ active: activeFilter && activeMainFilter && activeFilter.id === activeMainFilter.id }"
+              @click="selectFilter(activeMainFilter)"
+              :title="`Tutto in ${activeMainFilter.name}`"
+              data-testid="subfilter-all-button"
+            >
               All
             </button>
             <button
@@ -88,8 +95,19 @@
         </div>
         <draggable v-else v-model="images" tag="main" class="masonry-grid" :disabled="!isAdmin" @end="saveImages">
           <div v-for="image in filteredImages" :key="image.id" class="masonry-item" :class="{ 'draggable-item': isAdmin }">
-            <div class="image-wrapper" @click="!isAdmin && openLightbox(image.src)">
-              <img :src="image.src" :alt="image.alt" loading="lazy" @load="image.loaded = true" :class="{ loaded: image.loaded }" />
+            <div class="image-wrapper" :class="{ 'is-video': image.type === 'youtube' }" @click="!isAdmin && openLightbox(image)" :data-testid="`portfolio-item-${image.id}`">
+              <img
+                :src="image.type === 'youtube' ? youtubeThumb(image.youtubeId) : image.src"
+                :alt="image.alt"
+                loading="lazy"
+                :data-image-id="image.id"
+                @load="onImgLoad(image)"
+                @error="onImgLoad(image)"
+                :class="{ loaded: image.loaded, 'video-thumb': image.type === 'youtube' }"
+              />
+              <div v-if="image.type === 'youtube'" class="play-badge" aria-hidden="true">
+                <v-icon>mdi-play</v-icon>
+              </div>
               <div class="overlay"><span>{{ image.alt }}</span></div>
             </div>
             <div v-if="isAdmin" class="admin-card-controls">
@@ -109,6 +127,33 @@
               <button @click="cancelEditingAbout" class="edit-button cancel">Annulla</button>
               <button @click="saveAboutContent" class="edit-button save">Salva Modifiche</button>
             </div>
+          </div>
+          <div v-if="isEditingAbout" class="section-images-editor" data-testid="section-images-editor">
+            <h3>Immagini tra i paragrafi</h3>
+            <p class="editor-hint">Scegli dopo quale paragrafo mostrare un'immagine. Aggiungi sempre un testo alternativo per l'accessibilità.</p>
+            <div v-for="slot in aboutImageSlots" :key="slot.key" class="section-image-row" :data-testid="`section-image-row-${slot.key}`">
+              <div class="section-image-info">
+                <strong>{{ slot.label }}</strong>
+                <template v-if="editableSectionImages && editableSectionImages[slot.key]">
+                  <img :src="editableSectionImages[slot.key].src" class="section-image-preview" alt="Anteprima" />
+                  <input
+                    type="text"
+                    class="alt-input"
+                    placeholder="Testo alternativo"
+                    :value="editableSectionImages[slot.key].alt"
+                    @input="updateSectionImageAlt(slot.key, $event.target.value)"
+                    :data-testid="`section-image-alt-${slot.key}`"
+                  />
+                </template>
+              </div>
+              <div class="section-image-actions">
+                <button type="button" class="action-btn" @click="triggerSectionImageUpload(slot.key)" :data-testid="`section-image-upload-${slot.key}`">
+                  {{ editableSectionImages && editableSectionImages[slot.key] ? 'Sostituisci' : 'Carica immagine' }}
+                </button>
+                <button v-if="editableSectionImages && editableSectionImages[slot.key]" type="button" class="action-btn delete" @click="removeSectionImage(slot.key)">Rimuovi</button>
+              </div>
+            </div>
+            <input type="file" ref="sectionImageInput" accept="image/*" style="display:none" @change="handleSectionImageUpload" />
           </div>
           <div class="about-intro-grid">
             <div class="intro-image-wrapper">
@@ -130,6 +175,9 @@
               </div>
             </div>
           </div>
+          <figure v-if="sectionImage('intro')" class="about-inline-figure" data-testid="about-figure-intro">
+            <img :src="sectionImage('intro').src" :alt="sectionImage('intro').alt || ''" loading="lazy" />
+          </figure>
           <div class="about-section">
             <div v-if="!isEditingAbout">
               <h2 class="section-title">{{ aboutContent.journey_headline }}</h2>
@@ -142,6 +190,9 @@
               <textarea v-model="editableAboutContent.journey_p2" class="editable-field" rows="4"></textarea>
             </div>
           </div>
+          <figure v-if="sectionImage('journey')" class="about-inline-figure" data-testid="about-figure-journey">
+            <img :src="sectionImage('journey').src" :alt="sectionImage('journey').alt || ''" loading="lazy" />
+          </figure>
           <div class="about-section about-curiosity">
             <div v-if="!isEditingAbout">
               <h2 class="section-title">{{ aboutContent.curiosity_headline }}</h2>
@@ -154,6 +205,9 @@
               <textarea v-model="editableAboutContent.curiosity_p2" class="editable-field" rows="4"></textarea>
             </div>
           </div>
+          <figure v-if="sectionImage('curiosity')" class="about-inline-figure" data-testid="about-figure-curiosity">
+            <img :src="sectionImage('curiosity').src" :alt="sectionImage('curiosity').alt || ''" loading="lazy" />
+          </figure>
           <div class="about-section about-cta">
             <div v-if="!isEditingAbout">
               <h2 class="section-title">{{ aboutContent.cta_headline }}</h2>
@@ -164,6 +218,9 @@
               <textarea v-model="editableAboutContent.cta_p1" class="editable-field" rows="4"></textarea>
             </div>
           </div>
+          <figure v-if="sectionImage('cta')" class="about-inline-figure" data-testid="about-figure-cta">
+            <img :src="sectionImage('cta').src" :alt="sectionImage('cta').alt || ''" loading="lazy" />
+          </figure>
           <div class="about-quote">
             <p v-if="!isEditingAbout">{{ aboutContent.quote }}</p>
             <textarea v-else v-model="editableAboutContent.quote" class="editable-field editable-quote" rows="2"></textarea>
@@ -276,7 +333,7 @@
       </section>
 
       <footer>
-        <p>&copy; 2026 Portfolio Roberta</p>
+        <p data-testid="footer-copyright">&copy; 2026 RoPhil Portfolio</p>
         <!-- <div class="footer-social-buttons">
           <a href="https://www.instagram.com/rophil.art" target="_blank"><v-icon>mdi-instagram</v-icon></a>
           <a href="https://x.com/RoPhil_Art" target="_blank"><v-icon>mdi-twitter</v-icon></a>
@@ -304,8 +361,20 @@
             </select>
           </div>
           <div class="form-group">
+            <label for="mediaType">Tipo di contenuto</label>
+            <select v-model="newCard.type" id="mediaType" data-testid="card-type-select">
+              <option value="image">Immagine</option>
+              <option value="youtube">Video YouTube</option>
+            </select>
+          </div>
+          <div class="form-group" v-if="newCard.type === 'image'">
             <label for="imageFile">Immagine</label>
             <input type="file" @change="handleFileUpload" id="imageFile" accept="image/*" required>
+          </div>
+          <div class="form-group" v-else>
+            <label for="youtubeUrl">Link YouTube</label>
+            <input type="url" v-model.trim="newCard.youtubeUrl" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." required data-testid="youtube-url-input">
+            <p v-if="youtubeUrlError" class="field-error" data-testid="youtube-url-error">{{ youtubeUrlError }}</p>
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-button" @click="closeAddModal">Annulla</button>
@@ -315,11 +384,63 @@
       </div>
     </div>
 
-    <div v-if="lightboxVisible" class="lightbox" @click.self="closeLightbox">
-      <transition name="fade">
-        <img v-if="selectedImage" class="lightbox-content" :src="selectedImage" />
-      </transition>
-      <span class="close" @click="closeLightbox">&times;</span>
+    <div v-if="lightboxVisible" class="lightbox" data-testid="lightbox">
+      <template v-if="lightboxType === 'youtube'">
+        <div class="video-frame-wrapper" @click.self="closeLightbox">
+          <div class="video-frame-outer">
+            <div class="video-frame">
+              <iframe
+                :src="`https://www.youtube-nocookie.com/embed/${lightboxYoutubeId}?autoplay=1&rel=0`"
+                title="Video YouTube"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+                data-testid="lightbox-youtube-iframe"
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <div
+          ref="zoomStage"
+          class="zoom-stage"
+          @click="onStageClick"
+          @dblclick="onStageDblClick"
+          @wheel.prevent="onZoomWheel"
+          @mousedown="onPanStart"
+          @mousemove="onPanMove"
+          @mouseup="onPanEnd"
+          @mouseleave="onPanEnd"
+          @touchstart="onTouchStart"
+          @touchmove.prevent="onTouchMove"
+          @touchend="onTouchEnd"
+        >
+          <img
+            ref="zoomImg"
+            v-if="selectedImage"
+            class="lightbox-content"
+            :src="selectedImage"
+            :style="zoomStyle"
+            :class="{ 'is-zoomed': zoomScale > 1, 'is-interacting': zoomInteracting }"
+            draggable="false"
+            alt="Opera ingrandita"
+          />
+        </div>
+        <div class="zoom-controls" @click.stop role="group" aria-label="Controlli zoom">
+          <button type="button" @click="zoomOut" aria-label="Riduci zoom" data-testid="zoom-out-button">
+            <v-icon>mdi-minus</v-icon>
+          </button>
+          <span class="zoom-level" data-testid="zoom-level">{{ Math.round(zoomScale * 100) }}%</span>
+          <button type="button" @click="zoomIn" aria-label="Aumenta zoom" data-testid="zoom-in-button">
+            <v-icon>mdi-plus</v-icon>
+          </button>
+          <button type="button" @click="resetZoom" aria-label="Ripristina dimensione originale" data-testid="zoom-reset-button">
+            <v-icon>mdi-restore</v-icon>
+          </button>
+        </div>
+      </template>
+      <span class="close" @click="closeLightbox" role="button" tabindex="0" aria-label="Chiudi" @keydown.enter="closeLightbox" data-testid="lightbox-close">&times;</span>
     </div>
 
     <transition name="fade-in-up">
@@ -423,15 +544,50 @@ export default {
       newCard: {
         alt: '',
         tag: '',
-        src: ''
+        src: '',
+        type: 'image',
+        youtubeUrl: '',
+        youtubeId: ''
       },
+      youtubeUrlError: '',
       isEditingAbout: false,
       editableAboutContent: null,
       editingFilterId: null,
       editingFilterName: '',
+
+      // Lightbox zoom state
+      lightboxType: 'image',
+      lightboxYoutubeId: '',
+      zoomScale: 1,
+      zoomTx: 0,
+      zoomTy: 0,
+      zoomInteracting: false,
+      panState: null,
+      pinchState: null,
+      lastTapTime: 0,
+      stageMoved: false,
+
+      // About section images
+      aboutSectionImages: {},
+      editableSectionImages: null,
+      pendingImageSlot: null,
     };
   },
   computed: {
+    zoomStyle() {
+      return {
+        transform: `translate(${this.zoomTx}px, ${this.zoomTy}px) scale(${this.zoomScale})`
+      };
+    },
+    aboutImageSlots() {
+      const c = this.aboutContent || {};
+      return [
+        { key: 'intro', label: `Dopo l'introduzione` },
+        { key: 'journey', label: `Dopo "${c.journey_headline || 'The Journey'}"` },
+        { key: 'curiosity', label: `Dopo "${c.curiosity_headline || 'Curiosity and Inspiration'}"` },
+        { key: 'cta', label: `Dopo "${c.cta_headline || "Let's Create Together"}"` }
+      ];
+    },
     capitalizedPageTitle() {
       if (!this.activeFilter) return 'Portfolio';
       if (this.activeFilter.name === 'All') return 'Portfolio';
@@ -548,14 +704,30 @@ export default {
           .catch(err => console.error("Errore fetch about: ", err));
     },
     saveAboutContent() {
-      db.collection('siteContent').doc('about').set(this.editableAboutContent)
+      const batch = db.batch();
+      batch.set(db.collection('siteContent').doc('about'), this.editableAboutContent);
+      ['intro', 'journey', 'curiosity', 'cta'].forEach(key => {
+        const ref = db.collection('aboutSectionImages').doc(key);
+        const img = this.editableSectionImages && this.editableSectionImages[key];
+        if (img && img.src) {
+          batch.set(ref, { src: img.src, alt: img.alt || '' });
+        } else {
+          batch.delete(ref);
+        }
+      });
+      batch.commit()
           .then(() => {
             this.aboutContent = JSON.parse(JSON.stringify(this.editableAboutContent));
+            this.aboutSectionImages = JSON.parse(JSON.stringify(this.editableSectionImages || {}));
             this.isEditingAbout = false;
             this.editableAboutContent = null;
+            this.editableSectionImages = null;
             alert('Sezione "About Me" aggiornata!');
           })
-          .catch(err => console.error("Errore salvataggio about: ", err));
+          .catch(err => {
+            console.error("Errore salvataggio about: ", err);
+            alert(`Errore durante il salvataggio: ${err.message}`);
+          });
     },
     fetchFilters() {
       db.collection('siteContent').doc('categories').get()
@@ -600,7 +772,8 @@ export default {
     // --- Content Management ---
     closeAddModal() {
       this.showAddModal = false;
-      this.newCard = { alt: '', tag: '', src: '' };
+      this.newCard = { alt: '', tag: '', src: '', type: 'image', youtubeUrl: '', youtubeId: '' };
+      this.youtubeUrlError = '';
     },
     handleFileUpload(event) {
       const file = event.target.files[0];
@@ -610,8 +783,21 @@ export default {
       });
     },
     addCard() {
-      if (!this.newCard.src || !this.newCard.tag) {
-        alert('Compila tutti i campi.');
+      this.youtubeUrlError = '';
+      if (this.newCard.type === 'youtube') {
+        const id = this.extractYoutubeId(this.newCard.youtubeUrl);
+        if (!id) {
+          this.youtubeUrlError = 'Link YouTube non valido. Usa un URL come https://www.youtube.com/watch?v=... oppure https://youtu.be/...';
+          return;
+        }
+        this.newCard.youtubeId = id;
+        this.newCard.src = '';
+      } else if (!this.newCard.src) {
+        alert('Carica un\'immagine.');
+        return;
+      }
+      if (!this.newCard.tag) {
+        alert('Seleziona una categoria.');
         return;
       }
       this.isUploading = true;
@@ -653,11 +839,13 @@ export default {
     },
     startEditingAbout() {
       this.editableAboutContent = JSON.parse(JSON.stringify(this.aboutContent));
+      this.editableSectionImages = JSON.parse(JSON.stringify(this.aboutSectionImages || {}));
       this.isEditingAbout = true;
     },
     cancelEditingAbout() {
       this.isEditingAbout = false;
       this.editableAboutContent = null;
+      this.editableSectionImages = null;
     },
     triggerAboutImageUpload() {
       this.$refs.aboutImageInput.click();
@@ -881,14 +1069,208 @@ export default {
       };
       reader.readAsDataURL(file);
     },
-    openLightbox(src) {
-      this.selectedImage = src;
+    openLightbox(item) {
+      if (item && typeof item === 'object' && item.type === 'youtube') {
+        if (!item.youtubeId) return;
+        this.lightboxType = 'youtube';
+        this.lightboxYoutubeId = item.youtubeId;
+        this.selectedImage = '';
+      } else {
+        this.lightboxType = 'image';
+        this.selectedImage = item && typeof item === 'object' ? item.src : item;
+      }
+      this.resetZoom();
       this.lightboxVisible = true;
       this.lockBodyScroll();
     },
     closeLightbox() {
       this.lightboxVisible = false;
+      this.lightboxYoutubeId = '';
+      this.resetZoom();
       this.unlockBodyScroll();
+    },
+
+    // --- Zoom lightbox ---
+    clampScale(s) {
+      return Math.min(5, Math.max(1, s));
+    },
+    clampPan() {
+      const img = this.$refs.zoomImg;
+      if (!img) return;
+      const maxX = Math.max(0, (img.offsetWidth * (this.zoomScale - 1)) / 2);
+      const maxY = Math.max(0, (img.offsetHeight * (this.zoomScale - 1)) / 2);
+      this.zoomTx = Math.min(maxX, Math.max(-maxX, this.zoomTx));
+      this.zoomTy = Math.min(maxY, Math.max(-maxY, this.zoomTy));
+    },
+    setScale(s) {
+      this.zoomScale = this.clampScale(s);
+      if (this.zoomScale === 1) {
+        this.zoomTx = 0;
+        this.zoomTy = 0;
+      } else {
+        this.clampPan();
+      }
+    },
+    zoomIn() {
+      this.setScale(this.zoomScale * 1.3);
+    },
+    zoomOut() {
+      this.setScale(this.zoomScale / 1.3);
+    },
+    resetZoom() {
+      this.zoomScale = 1;
+      this.zoomTx = 0;
+      this.zoomTy = 0;
+      this.zoomInteracting = false;
+      this.panState = null;
+      this.pinchState = null;
+      this.stageMoved = false;
+    },
+    onZoomWheel(e) {
+      this.setScale(this.zoomScale * Math.exp(-e.deltaY * 0.002));
+    },
+    onPanStart(e) {
+      if (this.zoomScale <= 1) return;
+      e.preventDefault();
+      this.panState = { x: e.clientX, y: e.clientY, tx: this.zoomTx, ty: this.zoomTy };
+      this.zoomInteracting = true;
+    },
+    onPanMove(e) {
+      if (!this.panState) return;
+      this.zoomTx = this.panState.tx + (e.clientX - this.panState.x);
+      this.zoomTy = this.panState.ty + (e.clientY - this.panState.y);
+      this.stageMoved = true;
+      this.clampPan();
+    },
+    onPanEnd() {
+      this.panState = null;
+      this.zoomInteracting = false;
+    },
+    onStageClick(e) {
+      if (this.stageMoved) {
+        this.stageMoved = false;
+        return;
+      }
+      if (e.target === this.$refs.zoomStage) this.closeLightbox();
+    },
+    onStageDblClick() {
+      this.setScale(this.zoomScale > 1 ? 1 : 2.2);
+    },
+    touchDistance(t) {
+      return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    },
+    touchMidpoint(t) {
+      return { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 };
+    },
+    onTouchStart(e) {
+      if (e.touches.length === 2) {
+        this.pinchState = {
+          dist: this.touchDistance(e.touches),
+          scale: this.zoomScale,
+          tx: this.zoomTx,
+          ty: this.zoomTy,
+          mid: this.touchMidpoint(e.touches)
+        };
+        this.zoomInteracting = true;
+      } else if (e.touches.length === 1) {
+        const now = Date.now();
+        if (now - this.lastTapTime < 300) {
+          this.onStageDblClick();
+          this.lastTapTime = 0;
+        } else {
+          this.lastTapTime = now;
+        }
+        if (this.zoomScale > 1) {
+          this.panState = { x: e.touches[0].clientX, y: e.touches[0].clientY, tx: this.zoomTx, ty: this.zoomTy };
+          this.zoomInteracting = true;
+        }
+      }
+    },
+    onTouchMove(e) {
+      if (e.touches.length === 2 && this.pinchState) {
+        const d = this.touchDistance(e.touches);
+        const mid = this.touchMidpoint(e.touches);
+        this.zoomScale = this.clampScale(this.pinchState.scale * (d / this.pinchState.dist));
+        this.zoomTx = this.pinchState.tx + (mid.x - this.pinchState.mid.x);
+        this.zoomTy = this.pinchState.ty + (mid.y - this.pinchState.mid.y);
+        this.clampPan();
+      } else if (e.touches.length === 1 && this.panState) {
+        this.zoomTx = this.panState.tx + (e.touches[0].clientX - this.panState.x);
+        this.zoomTy = this.panState.ty + (e.touches[0].clientY - this.panState.y);
+        this.clampPan();
+      }
+    },
+    onTouchEnd(e) {
+      if (e.touches.length < 2) this.pinchState = null;
+      if (e.touches.length === 0) {
+        this.panState = null;
+        this.zoomInteracting = false;
+      }
+    },
+
+    // --- YouTube helpers ---
+    youtubeThumb(id) {
+      return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+    },
+    extractYoutubeId(url) {
+      if (!url) return null;
+      const m = String(url).match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+      return m ? m[1] : null;
+    },
+
+    // --- Image loading robustness ---
+    onImgLoad(image) {
+      if (image && !image.loaded) image.loaded = true;
+    },
+    checkImagesLoaded() {
+      if (!this.$el || !this.$el.querySelectorAll) return;
+      const imgs = this.$el.querySelectorAll('img[data-image-id]');
+      imgs.forEach(el => {
+        if (el.complete && el.naturalWidth > 0) {
+          const match = this.images.find(i => String(i.id) === el.getAttribute('data-image-id'));
+          if (match && !match.loaded) match.loaded = true;
+        }
+      });
+    },
+    onViewportChange() {
+      this.$nextTick(this.checkImagesLoaded);
+    },
+
+    // --- About section images ---
+    sectionImage(key) {
+      const source = this.isEditingAbout && this.editableSectionImages ? this.editableSectionImages : this.aboutSectionImages;
+      return source && source[key] && source[key].src ? source[key] : null;
+    },
+    fetchAboutImages() {
+      db.collection('aboutSectionImages').get()
+          .then(snap => {
+            const map = {};
+            snap.docs.forEach(d => { map[d.id] = d.data(); });
+            this.aboutSectionImages = map;
+          })
+          .catch(err => console.error('Errore fetch immagini about: ', err));
+    },
+    triggerSectionImageUpload(key) {
+      this.pendingImageSlot = key;
+      this.$refs.sectionImageInput.click();
+    },
+    handleSectionImageUpload(event) {
+      const file = event.target.files[0];
+      const slot = this.pendingImageSlot;
+      event.target.value = '';
+      if (!file || !slot) return;
+      this.compressImage(file, (result) => {
+        const existing = this.editableSectionImages[slot] || { alt: '' };
+        this.$set(this.editableSectionImages, slot, { ...existing, src: result });
+      });
+    },
+    updateSectionImageAlt(key, value) {
+      if (this.editableSectionImages[key]) {
+        this.$set(this.editableSectionImages, key, { ...this.editableSectionImages[key], alt: value });
+      }
+    },
+    removeSectionImage(key) {
+      this.$delete(this.editableSectionImages, key);
     },
     lockBodyScroll() {
       if (this.scrollLockActive) return;
@@ -912,6 +1294,10 @@ export default {
       event.preventDefault();
     },
     preventScrollKeys(event) {
+      if (event.key === 'Escape' && this.lightboxVisible) {
+        this.closeLightbox();
+        return;
+      }
       const blockedKeys = ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '];
       if (blockedKeys.includes(event.key)) {
         event.preventDefault();
@@ -982,12 +1368,20 @@ export default {
     this.fetchFilters();
     this.fetchImages();
     this.fetchAboutContent();
+    this.fetchAboutImages();
   },
   mounted() {
     window.addEventListener('scroll', this.handleScroll);
+    window.addEventListener('resize', this.onViewportChange);
+    window.addEventListener('orientationchange', this.onViewportChange);
+  },
+  updated() {
+    this.checkImagesLoaded();
   },
   beforeDestroy() {
     window.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('resize', this.onViewportChange);
+    window.removeEventListener('orientationchange', this.onViewportChange);
     this.unlockBodyScroll();
   }
 }
@@ -996,10 +1390,10 @@ export default {
 <style scoped>
 /* Il tuo CSS originale e completo, con le aggiunte per le nuove funzionalità */
 .portfolio-container {
-  --header-height: 100px;
-  font-family: 'Inter', sans-serif;
+  --header-height: 92px;
+  font-family: 'Nunito', sans-serif;
   background-color: #f8f8f8;
-  color: #333;
+  color: #393939;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -1022,7 +1416,7 @@ export default {
 }
 
 .logo {
-  max-width: 100px;
+  max-width: 84px;
   height: auto;
   display: block;
 }
@@ -1081,7 +1475,7 @@ footer {
 }
 
 .footer-social-buttons .v-icon {
-  color: #333;
+  color: #393939;
   transition: all 0.3s ease;
 }
 
@@ -1112,6 +1506,10 @@ footer {
   display: none;
 }
 
+.filter-bar-main button {
+  font-weight: 700;
+}
+
 .filter-bar-sub {
   margin-top: 0;
   padding-left: 0;
@@ -1120,6 +1518,7 @@ footer {
 
 .filter-bar-sub button {
   font-size: 0.95rem;
+  font-weight: 400;
 }
 
 .filter-bar button {
@@ -1128,7 +1527,7 @@ footer {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
   font-size: 0.95rem;
-  color: #555;
+  color: #4a4a4a;
   cursor: pointer;
   padding: 6px 12px;
   position: relative;
@@ -1152,7 +1551,7 @@ footer {
   gap: 0.5rem;
   font-size: 0.88rem;
   font-weight: bold;
-  color: #555;
+  color: #4a4a4a;
   transition: color 0.3s ease;
   padding: 6px 10px;
 }
@@ -1213,9 +1612,9 @@ footer {
   border-radius: 16px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.4);
+  transform: translateZ(0);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -1230,37 +1629,83 @@ footer {
   display: block;
   border-radius: 16px;
   opacity: 0;
-  transform: scale(1.05);
-  filter: blur(12px);
-  transition: all 0.6s ease;
+  transform: scale(1.02);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  animation: img-reveal-fallback 0.4s ease 1.8s forwards;
 }
 
 .image-wrapper img.loaded {
   opacity: 1;
   transform: scale(1);
-  filter: blur(0);
+  animation: none;
+}
+
+@keyframes img-reveal-fallback {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.image-wrapper img.video-thumb {
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.play-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(20, 20, 20, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.play-badge .v-icon {
+  color: #fff !important;
+  font-size: 34px;
 }
 
 .overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
+  background: linear-gradient(to top, rgba(20, 20, 20, 0.78) 0%, rgba(20, 20, 20, 0.45) 55%, rgba(20, 20, 20, 0.22) 100%);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   opacity: 0;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 1rem;
   color: #fff;
-  font-size: 1rem;
-  font-weight: 500;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
   border-radius: 16px;
   transition: opacity 0.3s ease;
+  z-index: 2;
 }
 
-.image-wrapper:hover .overlay {
-  opacity: 1.0;
+.image-wrapper:hover .overlay,
+.image-wrapper:focus-within .overlay {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .overlay {
+    opacity: 1;
+    background: linear-gradient(to top, rgba(20, 20, 20, 0.72) 0%, rgba(20, 20, 20, 0.28) 35%, rgba(20, 20, 20, 0) 60%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .lightbox {
@@ -1284,6 +1729,113 @@ footer {
   border-radius: 16px;
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.25);
+  will-change: transform;
+  transition: transform 0.25s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.lightbox-content.is-interacting {
+  transition: none;
+}
+
+.lightbox-content.is-zoomed {
+  cursor: grab;
+}
+
+.lightbox-content.is-zoomed:active {
+  cursor: grabbing;
+}
+
+.zoom-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  padding: 30px;
+}
+
+.zoom-controls {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 6px 12px;
+  z-index: 1000;
+}
+
+.zoom-controls button {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.zoom-controls button:hover,
+.zoom-controls button:focus-visible {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.zoom-controls .v-icon {
+  color: #fff !important;
+  font-size: 22px;
+}
+
+.zoom-level {
+  color: #fff;
+  min-width: 52px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.video-frame-wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.video-frame-outer {
+  width: min(92vw, 1000px);
+}
+
+.video-frame {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+.video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 .close {
@@ -1332,9 +1884,17 @@ footer {
   color: #fff !important;
 }
 
+.menu-button-img {
+  width: 40px;
+  height: 40px;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
+}
+
 @media (max-width: 600px) {
   .portfolio-container {
-    --header-height: 86px;
+    --header-height: 78px;
   }
 
   .top-navbar {
@@ -1342,7 +1902,7 @@ footer {
   }
 
   .logo {
-    max-width: 92px;
+    max-width: 70px;
   }
 
   .social-buttons-header {
@@ -1361,6 +1921,11 @@ footer {
 
   .menu-button-icon {
     font-size: 36px;
+  }
+
+  .menu-button-img {
+    width: 34px;
+    height: 34px;
   }
 }
 
@@ -1410,7 +1975,7 @@ footer {
   padding: 10px 32px 10px 10px;
   text-decoration: none;
   font-size: 1.2rem;
-  color: #333;
+  color: #393939;
   display: block;
   position: relative;
   text-align: right;
@@ -1432,7 +1997,7 @@ footer {
 }
 
 .social-buttons .v-icon {
-  color: #333;
+  color: #393939;
   font-size: 24px;
 }
 
@@ -1500,7 +2065,7 @@ footer {
 .page-title {
   font-size: 2.5rem;
   font-weight: 700;
-  color: #333;
+  color: #393939;
   margin-bottom: 2rem;
 }
 
@@ -1577,7 +2142,7 @@ footer {
 .contact-intro {
   line-height: 1.7;
   font-size: 1rem;
-  color: #555;
+  color: #4a4a4a;
 }
 
 .about-quote {
@@ -1618,7 +2183,7 @@ footer {
 
 .form-group label {
   font-size: 1rem;
-  color: #333;
+  color: #393939;
   margin-bottom: 0.5rem;
   font-weight: 600;
 }
@@ -1631,7 +2196,7 @@ footer {
   border: 1px solid rgba(221, 221, 221, 0.9);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.5);
-  color: #333;
+  color: #393939;
   font-size: 1rem;
   transition: all 0.3s ease;
 }
@@ -1658,9 +2223,11 @@ footer {
 
 .portfolio-section h1 {
   text-align: center;
-  margin-bottom: 2rem;
-  font-size: 2.5rem;
-  color: #333;
+  margin-bottom: 1.25rem;
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #393939;
 }
 
 /* === Stili per le nuove funzionalità === */
@@ -1710,7 +2277,7 @@ footer {
 .modal-content h2 {
   text-align: center;
   margin-bottom: 2rem;
-  color: #333;
+  color: #393939;
 }
 
 .modal-actions {
@@ -1722,7 +2289,7 @@ footer {
 
 .cancel-button {
   background: #ddd;
-  color: #333;
+  color: #393939;
   border: none;
   padding: 0.8rem 1.5rem;
   border-radius: 50px;
@@ -1751,7 +2318,7 @@ footer {
 }
 
 .empty-portfolio h2 {
-  color: #333;
+  color: #393939;
   margin-bottom: 1rem;
 }
 
@@ -1814,7 +2381,7 @@ footer {
 }
 
 .edit-button {
-  background-color: #555;
+  background-color: #4a4a4a;
   color: white;
   border: none;
   padding: 0.6rem 1.2rem;
@@ -1834,7 +2401,7 @@ footer {
 }
 
 .edit-button:hover {
-  background-color: #333;
+  background-color: #393939;
 }
 
 .edit-button.save:hover {
@@ -2038,5 +2605,80 @@ footer {
 .add-category-container {
   text-align: center;
   margin-top: 2rem;
+}
+
+.field-error {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+
+.about-inline-figure {
+  margin: 0;
+  text-align: center;
+}
+
+.about-inline-figure img {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+.section-images-editor {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px dashed #ccc;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+}
+
+.section-images-editor h3 {
+  margin-bottom: 0.25rem;
+  color: #393939;
+}
+
+.editor-hint {
+  font-size: 0.85rem;
+  color: #777;
+  margin-bottom: 1rem;
+}
+
+.section-image-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid #eee;
+  flex-wrap: wrap;
+}
+
+.section-image-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.section-image-preview {
+  width: 72px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.alt-input {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.section-image-actions {
+  display: flex;
+  gap: 0.5rem;
 }
 </style>

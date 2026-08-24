@@ -21,10 +21,11 @@ export default {
 </script>
 
 <style>
-@import url("https://fonts.googleapis.com/css2?family=RocknRoll+One&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,300..900;1,300..900&display=swap");
 
 #app {
-  font-family: 'RocknRoll One', sans-serif;
+  font-family: 'Nunito', sans-serif;
+  color: #393939;
   overflow-x: hidden;
 }
 </style>
