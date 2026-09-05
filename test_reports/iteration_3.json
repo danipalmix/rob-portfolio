@@ -1,0 +1,57 @@
+{
+  "summary": "End-to-end frontend testing of the new admin-manageable HERO SLIDER on the RoPhil Portfolio site (Vue 2 SPA, Firebase prod backend). All 12 required scenarios were exercised via Playwright against http://localhost:3000 using the real admin credentials against the LIVE Firestore heroSlides collection. Both test slides created were fully cleaned up at the end (verified empty state + no leaked docs). One notable issue found: the 'invalid external URL' validation error message did not surface in the DOM under [data-testid=slide-form-error] during the automated flow (though the correct-URL save worked and no invalid slide was persisted). Autoplay did not visually advance during the 7.5s wait because the Playwright mouse remained hovering over the hero after clicking a dot, which correctly triggers pauseHero() (intended UX, not a bug). NOTE: Frontend supervisor initially had to be restarted once because chokidar hit ENOSPC (system file-watcher limit) and had NOT hot-reloaded new source changes — the pre-restart bundle was missing the Gestione Slider nav link. After a manual `supervisorctl restart frontend`, everything worked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Slide modal / saveSlide validation",
+        "issue": "When saving a new slide with an external CTA and an invalid URL ('google'), the [data-testid=slide-form-error] element was NOT present/visible after clicking [data-testid=slide-save-button] (waited 700ms). The invalid slide was NOT saved (final DB state clean, and correcting the URL to https://www.google.com then saving worked and produced the correct external <a target=_blank href=https://www.google.com rel=noopener noreferrer>). Likely a Vue reactivity/timing issue where slideFormError is set but the paragraph is cleared/replaced before render, or the button click did not actually invoke saveSlide (e.g. because setInputFiles for the image had not yet resolved). Recommend main agent verify manually and ensure the invalid-URL branch reliably renders the error message.",
+        "selector": "[data-testid=slide-form-error]",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Hero (desktop 1440px)",
+        "issues": [
+          "Layout looks good: full-width, ~90vh here (not 100vh), title/subtitle/description/CTA all visible with dark overlay. Arrows and 2 dots render as expected. 'Gestisci slider' overlay button visible top-right for admin."
+        ]
+      },
+      {
+        "screen": "Hero (mobile 390px)",
+        "issues": [
+          "Prev/next arrows overlap the description text at 390px — the arrow buttons sit vertically centered and cross the text column. Title, subtitle, description and CTA remain readable and CTA is clickable, but arrows could be made smaller or moved to bottom on <=430px. Minor cosmetic issue."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Verify that invalid-URL validation for external CTAs consistently renders the error text in [data-testid=slide-form-error] (repro: open Aggiungi Nuova Slide, upload image, add CTA, set linkType=external, url='google', click Salva). It may be a Vue $nextTick issue.",
+    "(Cosmetic) On mobile widths (~390px) the hero left/right arrows visually overlap the description text; consider shrinking them or hiding them and relying on swipe on small viewports.",
+    "(Environment / not app code) The dev container hit ENOSPC on inotify watchers, causing hot-reload to silently miss edits. When testing/development sees stale UI, main agent should `sudo supervisorctl restart frontend` or raise fs.inotify.max_user_watches."
+  ],
+  "critical_code_review_comments": [
+    "rob-portfolio.vue is 3571 lines — massively over the 700-line guideline. Should be split into HeroSlider.vue, SlideModal.vue, ManageSlider.vue, PortfolioGrid.vue, AdminSections, etc.",
+    "saveSlide silently coerces overlay/duration to defaults; a Pydantic-style upfront validation with per-field error hints would be cleaner and give better UX.",
+    "scheduleHeroAutoplay pauses on mouse hover via pauseHero — good UX, but this also means users who move their cursor onto the hero on desktop will never see auto-advance. Consider only pausing on explicit hover of the arrows/dots, or resuming after 2-3s.",
+    "confirm()/alert() are used for delete confirmation and login result — should be replaced with the existing sweetalert2/toast system already imported in package.json.",
+    "In goToHeroSlide, when idx === current, scheduleHeroAutoplay() is called but heroTransitionName is not reset — harmless but noisy.",
+    "compressImage → base64 stored directly in Firestore doc: fine for a handful of slides, but each doc can hit Firestore's 1MB doc size limit if the source images are large. Consider migrating to Firebase Storage URLs going forward."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (no backend service — Firebase is the only backend)",
+    "frontend": "~95% (12/12 required scenarios executed; 11 fully passed, 1 partially passed - invalid-URL validation error message not observed but the invalid save was correctly rejected)"
+  },
+  "test_credentials": "rophil.art@gmail.com / RobAdmin2025! (as in /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 test heroSlides docs during the run (Test Slide 1, Test Slide 2). BOTH DELETED at end of run — verified heroSlides collection returned to empty state (baseline 0 → final 0, LEAKED=∅).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The frontend is served by supervisor 'frontend' running `vue-cli-service serve` on port 3000. Hot-reload can be broken by inotify ENOSPC — if UI does not reflect source, run `sudo supervisorctl restart frontend`. Live Firestore project rob-portfolio-bdba9 is used; production collections portfolioImages/siteContent/aboutSectionImages/admins MUST NOT be touched — only heroSlides may be modified and every created doc must be deleted after the test. Login shows a window.alert on success, and delete uses window.confirm — always register a page.on('dialog', ...) handler that accepts. compressImage takes ~1-2s, so wait ~2.5s after set_input_files before filling title/etc. All key elements have stable data-testids listed in the review request. Navigation is via .menu-button (hamburger, top right) then anchor text in the sidenav.",
+  "rca of the issue": "Two anomalies observed. (1) Invalid-URL validation: saveSlide() sets slideFormError synchronously and returns before Firestore is called, so the <p data-testid=slide-form-error> should render on the next tick. It renders correctly for the 'no image' case (verified: 'Carica un\\'immagine di sfondo per la slide.'), but for the external-URL-invalid case the DOM query returned null 700ms after click. Possible causes: (a) select_option('external') on cta-linktype-select-0 hadn't propagated the v-model change before the save click (unlikely — final saved CTA is correctly external), (b) the setInputFiles/compressImage was still resolving so save button was actually disabled and click was silently swallowed, (c) some second-mount of the modal cleared slideFormError between set and query. Recommend main agent add a defensive $nextTick + await for slideFormError, or force a synchronous re-render. (2) Autoplay did not advance during the 7.5s wait: root cause = @mouseenter=pauseHero on the hero-slider root. Playwright's cursor remained hovering the hero after the previous click, so heroPaused stayed true. This is intended UX; not a bug. To retest autoplay: move mouse outside the hero region (e.g. page.mouse.move(10, 10)) before waiting."
+}

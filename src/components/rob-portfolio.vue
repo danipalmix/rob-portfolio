@@ -39,6 +39,7 @@
           <li><a href="#" @click.prevent="changePage('about')">About Me</a></li>
           <!-- <li><a href="#" @click.prevent="changePage('my-projects')">My Projects</a></li> -->
           <li v-if="isAdmin"><a href="#" @click.prevent="changePage('manage-categories')">Gestione Categorie</a></li>
+          <li v-if="isAdmin"><a href="#" @click.prevent="changePage('manage-slider')" data-testid="manage-slider-link">Gestione Slider</a></li>
           <li><a href="#" @click.prevent="changePage('contact')">Contact Me</a></li>
           <li v-if="!user"><a href="#" @click.prevent="changePage('login')">Admin Login</a></li>
           <li v-if="user"><a href="#" @click.prevent="logout">Logout</a></li>
@@ -54,6 +55,79 @@
     <div v-if="navOpen" class="sidenav-backdrop" @click="closeNav"></div>
 
     <div :class="['main-content-wrapper', { 'shifted': navOpen }]">
+
+      <section
+        v-if="currentPage === 'portfolio' && currentHeroSlide"
+        class="hero-slider"
+        data-testid="hero-slider"
+        aria-roledescription="carousel"
+        aria-label="In evidenza"
+        @mouseenter="pauseHero"
+        @mouseleave="resumeHero"
+        @touchstart="onHeroTouchStart"
+        @touchend="onHeroTouchEnd"
+      >
+        <transition :name="heroTransitionName">
+          <div
+            :key="currentHeroSlide.id"
+            class="hero-slide"
+            :style="{ backgroundImage: `url(${currentHeroSlide.src})` }"
+            data-testid="hero-slide"
+          >
+            <div class="hero-overlay" :style="heroOverlayStyle(currentHeroSlide)"></div>
+            <div class="hero-content">
+              <h2 v-if="currentHeroSlide.title" class="hero-title" data-testid="hero-title">{{ currentHeroSlide.title }}</h2>
+              <p v-if="currentHeroSlide.subtitle" class="hero-subtitle" data-testid="hero-subtitle">{{ currentHeroSlide.subtitle }}</p>
+              <p v-if="currentHeroSlide.description" class="hero-description" data-testid="hero-description">{{ currentHeroSlide.description }}</p>
+              <div v-if="currentHeroSlide.ctas && currentHeroSlide.ctas.length" class="hero-ctas">
+                <template v-for="(cta, i) in currentHeroSlide.ctas">
+                  <a
+                    v-if="cta.linkType === 'external'"
+                    :key="`cta-${i}`"
+                    :href="cta.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="hero-cta-button"
+                    :data-testid="`hero-cta-button-${i}`"
+                  >{{ cta.label }}</a>
+                  <button
+                    v-else
+                    :key="`cta-${i}`"
+                    type="button"
+                    class="hero-cta-button"
+                    :data-testid="`hero-cta-button-${i}`"
+                    @click="handleHeroCta(cta)"
+                  >{{ cta.label }}</button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <template v-if="activeSlides.length > 1">
+          <button class="hero-arrow hero-arrow-left" @click="prevHeroSlide" aria-label="Slide precedente" data-testid="hero-arrow-prev">
+            <v-icon>mdi-chevron-left</v-icon>
+          </button>
+          <button class="hero-arrow hero-arrow-right" @click="nextHeroSlide()" aria-label="Slide successiva" data-testid="hero-arrow-next">
+            <v-icon>mdi-chevron-right</v-icon>
+          </button>
+          <div class="hero-dots" aria-label="Indicatori slide">
+            <button
+              v-for="(slide, i) in activeSlides"
+              :key="slide.id"
+              class="hero-dot"
+              :class="{ active: i === safeHeroIndex }"
+              :aria-label="`Vai alla slide ${i + 1}`"
+              :data-testid="`hero-dot-${i}`"
+              @click="goToHeroSlide(i)"
+            ></button>
+          </div>
+        </template>
+
+        <button v-if="isAdmin" class="hero-manage-btn" @click="changePage('manage-slider')" data-testid="hero-manage-button">
+          <v-icon small>mdi-pencil</v-icon> Gestisci slider
+        </button>
+      </section>
 
       <section v-if="currentPage === 'portfolio'" class="portfolio-section">
         <h1 class="mt-8">{{ capitalizedPageTitle }}</h1>
@@ -291,6 +365,52 @@
         </div>
       </section>
 
+      <section v-if="currentPage === 'manage-slider' && isAdmin" class="manage-slider-container" data-testid="manage-slider-section">
+        <h1 class="page-title">Gestione Hero Slider</h1>
+        <p class="editor-hint">Trascina le slide per riordinarle. Le slide disattivate non vengono mostrate ai visitatori.</p>
+        <div class="slider-manager">
+          <div v-if="heroSlides.length === 0" class="empty-portfolio" data-testid="slider-empty-state">
+            <h2>Nessuna slide presente.</h2>
+            <p>Aggiungi la prima slide con il pulsante qui sotto.</p>
+          </div>
+          <draggable
+            v-else
+            v-model="heroSlides"
+            tag="ul"
+            class="slide-admin-list"
+            handle=".drag-handle"
+            @end="saveSlideOrder"
+          >
+            <li v-for="slide in heroSlides" :key="slide.id" class="slide-admin-item" :class="{ inactive: slide.active === false }" :data-testid="`slide-admin-item-${slide.id}`">
+              <span class="drag-handle" title="Trascina per riordinare">
+                <v-icon small>mdi-drag</v-icon>
+              </span>
+              <img :src="slide.src" class="slide-admin-thumb" alt="Anteprima slide" />
+              <div class="slide-admin-info">
+                <strong>{{ slide.title || 'Senza titolo' }}</strong>
+                <span class="slide-admin-meta">
+                  {{ slide.transition === 'slide' ? 'Scorrimento' : 'Dissolvenza' }} ·
+                  {{ slide.duration || 6 }}s ·
+                  {{ (slide.ctas || []).length }} CTA ·
+                  {{ slide.active === false ? 'Disattivata' : 'Attiva' }}
+                </span>
+              </div>
+              <label class="slide-active-toggle">
+                <input type="checkbox" :checked="slide.active !== false" @change="toggleSlideActive(slide)" :data-testid="`slide-active-toggle-${slide.id}`" />
+                Attiva
+              </label>
+              <div class="category-actions">
+                <button @click="openSlideModal(slide)" class="action-btn" :data-testid="`slide-edit-button-${slide.id}`">Modifica</button>
+                <button @click="deleteSlide(slide.id)" class="action-btn delete" :data-testid="`slide-delete-button-${slide.id}`">Elimina</button>
+              </div>
+            </li>
+          </draggable>
+          <div class="add-category-container">
+            <button @click="openSlideModal(null)" class="cta-button" data-testid="add-slide-button">Aggiungi Nuova Slide</button>
+          </div>
+        </div>
+      </section>
+
       <section v-if="currentPage === 'contact'" class="contact-container">
         <h1 class="page-title">Let's Get in Touch</h1>
         <div class="contact-content">
@@ -379,6 +499,91 @@
           <div class="modal-actions">
             <button type="button" class="cancel-button" @click="closeAddModal">Annulla</button>
             <button type="submit" class="cta-button" :disabled="isUploading">{{ isUploading ? 'Elaborazione...' : 'Aggiungi' }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="showSlideModal && editableSlide" class="modal-overlay" @click.self="closeSlideModal">
+      <div class="modal-content slide-modal" data-testid="slide-modal">
+        <h2>{{ editingSlideId ? 'Modifica Slide' : 'Nuova Slide' }}</h2>
+        <form @submit.prevent="saveSlide">
+          <div class="form-group">
+            <label for="slideImageFile">Immagine di sfondo</label>
+            <img v-if="editableSlide.src" :src="editableSlide.src" class="slide-image-preview" alt="Anteprima slide" data-testid="slide-image-preview" />
+            <input type="file" id="slideImageFile" accept="image/*" @change="handleSlideImageUpload" data-testid="slide-image-input" />
+          </div>
+          <div class="form-group">
+            <label for="slideTitle">Titolo</label>
+            <input type="text" id="slideTitle" v-model="editableSlide.title" placeholder="Titolo della slide" data-testid="slide-title-input" />
+          </div>
+          <div class="form-group">
+            <label for="slideSubtitle">Sottotitolo</label>
+            <input type="text" id="slideSubtitle" v-model="editableSlide.subtitle" placeholder="Sottotitolo" data-testid="slide-subtitle-input" />
+          </div>
+          <div class="form-group">
+            <label for="slideDescription">Testo descrittivo</label>
+            <textarea id="slideDescription" rows="2" v-model="editableSlide.description" placeholder="Breve testo descrittivo (opzionale)" data-testid="slide-description-input"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Pulsanti CTA</label>
+            <div v-for="(cta, i) in editableSlide.ctas" :key="i" class="cta-editor-row" :data-testid="`cta-editor-row-${i}`">
+              <input type="text" v-model="cta.label" placeholder="Testo (es. Scopri di più)" :data-testid="`cta-label-input-${i}`" />
+              <select v-model="cta.linkType" :data-testid="`cta-linktype-select-${i}`">
+                <option value="internal">Pagina interna</option>
+                <option value="external">Link esterno</option>
+              </select>
+              <select v-if="cta.linkType === 'internal'" v-model="cta.page" :data-testid="`cta-page-select-${i}`">
+                <option v-for="p in heroInternalPages" :key="p.value" :value="p.value">{{ p.label }}</option>
+              </select>
+              <input v-else type="url" v-model.trim="cta.url" placeholder="https://..." :data-testid="`cta-url-input-${i}`" />
+              <button type="button" class="cta-remove-btn" @click="removeSlideCta(i)" :aria-label="`Rimuovi CTA ${i + 1}`" :data-testid="`cta-remove-button-${i}`">
+                <v-icon small>mdi-close</v-icon>
+              </button>
+            </div>
+            <button type="button" class="add-subcategory-btn" @click="addSlideCta" data-testid="add-cta-button">+ Aggiungi CTA</button>
+          </div>
+
+          <div class="slide-config-grid">
+            <div class="form-group">
+              <label for="slideDuration">Durata (secondi)</label>
+              <input type="number" id="slideDuration" min="2" max="30" v-model.number="editableSlide.duration" data-testid="slide-duration-input" />
+            </div>
+            <div class="form-group">
+              <label for="slideTransition">Transizione</label>
+              <select id="slideTransition" v-model="editableSlide.transition" data-testid="slide-transition-select">
+                <option value="fade">Dissolvenza (fade)</option>
+                <option value="slide">Scorrimento (slide)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="slideOverlay">Overlay</label>
+              <select id="slideOverlay" v-model="editableSlide.overlay" data-testid="slide-overlay-select">
+                <option value="dark">Scuro uniforme</option>
+                <option value="gradient">Gradiente dal basso</option>
+                <option value="none">Nessuno</option>
+              </select>
+            </div>
+            <div class="form-group" v-if="editableSlide.overlay !== 'none'">
+              <label for="slideOverlayOpacity">Intensità overlay: {{ editableSlide.overlayOpacity }}%</label>
+              <input type="range" id="slideOverlayOpacity" min="0" max="90" step="5" v-model.number="editableSlide.overlayOpacity" data-testid="slide-overlay-opacity-input" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="slide-active-toggle">
+              <input type="checkbox" v-model="editableSlide.active" data-testid="slide-active-checkbox" />
+              Slide attiva (visibile sul sito)
+            </label>
+          </div>
+
+          <p v-if="slideFormError" class="field-error" data-testid="slide-form-error">{{ slideFormError }}</p>
+          <div class="modal-actions">
+            <button type="button" class="cancel-button" @click="closeSlideModal">Annulla</button>
+            <button type="submit" class="cta-button" :disabled="isUploading || isSavingSlide" data-testid="slide-save-button">
+              {{ isUploading ? 'Elaborazione immagine...' : (isSavingSlide ? 'Salvataggio...' : 'Salva Slide') }}
+            </button>
           </div>
         </form>
       </div>
@@ -571,6 +776,19 @@ export default {
       aboutSectionImages: {},
       editableSectionImages: null,
       pendingImageSlot: null,
+
+      // Hero slider
+      heroSlides: [],
+      heroIndex: 0,
+      heroTransitionName: 'hero-fade',
+      heroPaused: false,
+      heroTimer: null,
+      heroTouchStartX: null,
+      showSlideModal: false,
+      editableSlide: null,
+      editingSlideId: null,
+      isSavingSlide: false,
+      slideFormError: '',
     };
   },
   computed: {
@@ -640,6 +858,24 @@ export default {
         const allFilter = this.filters.find(filter => filter.id === 'all');
         this.filters = allFilter ? [allFilter, ...newOrder] : newOrder;
       }
+    },
+    activeSlides() {
+      return this.heroSlides.filter(s => s.active !== false && s.src);
+    },
+    safeHeroIndex() {
+      if (!this.activeSlides.length) return 0;
+      return Math.min(this.heroIndex, this.activeSlides.length - 1);
+    },
+    currentHeroSlide() {
+      if (!this.activeSlides.length) return null;
+      return this.activeSlides[this.safeHeroIndex];
+    },
+    heroInternalPages() {
+      return [
+        { value: 'portfolio', label: 'Portfolio (Home)' },
+        { value: 'about', label: 'About Me' },
+        { value: 'contact', label: 'Contact Me' }
+      ];
     }
   },
   methods: {
@@ -648,6 +884,7 @@ export default {
       this.currentPage = page;
       this.closeNav();
       this.scrollToTop();
+      this.$nextTick(() => this.scheduleHeroAutoplay());
     },
     displayFilterName(filter) {
       if (!filter) return '';
@@ -746,6 +983,248 @@ export default {
       db.collection('siteContent').doc('categories').set({ filtersArray: this.filters })
           .then(() => alert('Struttura categorie salvata!'))
           .catch(err => console.error("Errore salvataggio categorie: ", err));
+    },
+
+    // --- Hero Slider ---
+    fetchHeroSlides() {
+      db.collection('heroSlides').orderBy('order', 'asc').get()
+          .then(s => {
+            this.heroSlides = s.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            this.heroIndex = 0;
+            this.scheduleHeroAutoplay();
+          })
+          .catch(err => console.error('Errore fetch hero slides: ', err));
+    },
+    stopHeroAutoplay() {
+      if (this.heroTimer) {
+        clearTimeout(this.heroTimer);
+        this.heroTimer = null;
+      }
+    },
+    scheduleHeroAutoplay() {
+      this.stopHeroAutoplay();
+      if (this.currentPage !== 'portfolio') return;
+      if (this.heroPaused || document.hidden) return;
+      if (this.activeSlides.length < 2) return;
+      const slide = this.currentHeroSlide;
+      const seconds = slide && Number(slide.duration) > 0 ? Number(slide.duration) : 6;
+      this.heroTimer = setTimeout(() => this.nextHeroSlide(), seconds * 1000);
+    },
+    goToHeroSlide(newIndex, direction) {
+      const total = this.activeSlides.length;
+      if (!total) return;
+      const idx = ((newIndex % total) + total) % total;
+      if (idx === this.safeHeroIndex) {
+        this.scheduleHeroAutoplay();
+        return;
+      }
+      const dir = direction || (idx > this.safeHeroIndex ? 'next' : 'prev');
+      const target = this.activeSlides[idx];
+      const type = target && target.transition === 'slide' ? 'slide' : 'fade';
+      this.heroTransitionName = type === 'fade' ? 'hero-fade' : (dir === 'prev' ? 'hero-slide-prev' : 'hero-slide-next');
+      this.heroIndex = idx;
+      this.scheduleHeroAutoplay();
+    },
+    nextHeroSlide() {
+      this.goToHeroSlide(this.safeHeroIndex + 1, 'next');
+    },
+    prevHeroSlide() {
+      this.goToHeroSlide(this.safeHeroIndex - 1, 'prev');
+    },
+    pauseHero() {
+      this.heroPaused = true;
+      this.stopHeroAutoplay();
+    },
+    resumeHero() {
+      this.heroPaused = false;
+      this.scheduleHeroAutoplay();
+    },
+    onHeroTouchStart(e) {
+      if (e.touches && e.touches.length === 1) {
+        this.heroTouchStartX = e.touches[0].clientX;
+      }
+    },
+    onHeroTouchEnd(e) {
+      if (this.heroTouchStartX === null) return;
+      const endX = e.changedTouches && e.changedTouches.length ? e.changedTouches[0].clientX : null;
+      if (endX !== null) {
+        const delta = endX - this.heroTouchStartX;
+        if (Math.abs(delta) > 45) {
+          delta < 0 ? this.nextHeroSlide() : this.prevHeroSlide();
+        }
+      }
+      this.heroTouchStartX = null;
+    },
+    onHeroVisibilityChange() {
+      this.scheduleHeroAutoplay();
+    },
+    heroOverlayStyle(slide) {
+      const raw = Number(slide.overlayOpacity);
+      const op = (isNaN(raw) ? 45 : Math.min(90, Math.max(0, raw))) / 100;
+      if (slide.overlay === 'none') return { background: 'transparent' };
+      if (slide.overlay === 'gradient') {
+        return {
+          background: `linear-gradient(to top, rgba(0,0,0,${Math.min(op + 0.25, 0.9).toFixed(2)}) 0%, rgba(0,0,0,${(op * 0.6).toFixed(2)}) 50%, rgba(0,0,0,0.05) 100%)`
+        };
+      }
+      return { background: `rgba(0,0,0,${op})` };
+    },
+    handleHeroCta(cta) {
+      this.changePage(cta.page || 'portfolio');
+    },
+
+    // --- Hero Slider Admin ---
+    blankSlide() {
+      return {
+        title: '',
+        subtitle: '',
+        description: '',
+        src: '',
+        active: true,
+        duration: 6,
+        transition: 'fade',
+        overlay: 'dark',
+        overlayOpacity: 45,
+        ctas: []
+      };
+    },
+    openSlideModal(slide) {
+      if (slide) {
+        this.editingSlideId = slide.id;
+        const copy = JSON.parse(JSON.stringify(slide));
+        this.editableSlide = {
+          ...this.blankSlide(),
+          ...copy,
+          active: copy.active !== false,
+          ctas: Array.isArray(copy.ctas) ? copy.ctas.map(c => ({ label: c.label || '', linkType: c.linkType === 'external' ? 'external' : 'internal', url: c.url || '', page: c.page || 'portfolio' })) : []
+        };
+      } else {
+        this.editingSlideId = null;
+        this.editableSlide = this.blankSlide();
+      }
+      this.slideFormError = '';
+      this.showSlideModal = true;
+    },
+    closeSlideModal() {
+      this.showSlideModal = false;
+      this.editableSlide = null;
+      this.editingSlideId = null;
+      this.slideFormError = '';
+    },
+    handleSlideImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.compressImage(file, (result) => {
+        this.editableSlide.src = result;
+      });
+    },
+    addSlideCta() {
+      this.editableSlide.ctas.push({ label: '', linkType: 'internal', url: '', page: 'portfolio' });
+    },
+    removeSlideCta(index) {
+      this.editableSlide.ctas.splice(index, 1);
+    },
+    saveSlide() {
+      this.slideFormError = '';
+      const s = this.editableSlide;
+      if (!s.src) {
+        this.slideFormError = 'Carica un\'immagine di sfondo per la slide.';
+        return;
+      }
+      for (const cta of s.ctas) {
+        if (!cta.label || !cta.label.trim()) {
+          this.slideFormError = 'Ogni pulsante CTA deve avere un testo.';
+          return;
+        }
+        if (cta.linkType === 'external' && !/^https?:\/\/.+/.test(cta.url || '')) {
+          this.slideFormError = `URL non valido per la CTA "${cta.label}". Deve iniziare con http:// o https://`;
+          return;
+        }
+      }
+      const payload = {
+        title: (s.title || '').trim(),
+        subtitle: (s.subtitle || '').trim(),
+        description: (s.description || '').trim(),
+        src: s.src,
+        active: s.active !== false,
+        duration: Math.min(30, Math.max(2, Number(s.duration) || 6)),
+        transition: s.transition === 'slide' ? 'slide' : 'fade',
+        overlay: ['dark', 'gradient', 'none'].includes(s.overlay) ? s.overlay : 'dark',
+        overlayOpacity: Math.min(90, Math.max(0, Number(s.overlayOpacity) || 0)),
+        ctas: s.ctas.map(c => ({
+          label: c.label.trim(),
+          linkType: c.linkType === 'external' ? 'external' : 'internal',
+          url: c.linkType === 'external' ? (c.url || '').trim() : '',
+          page: c.linkType === 'external' ? '' : (c.page || 'portfolio')
+        }))
+      };
+      this.isSavingSlide = true;
+      if (this.editingSlideId) {
+        const id = this.editingSlideId;
+        const existing = this.heroSlides.find(sl => sl.id === id);
+        const order = existing ? existing.order : this.heroSlides.length;
+        db.collection('heroSlides').doc(id).set({ ...payload, order })
+            .then(() => {
+              const idx = this.heroSlides.findIndex(sl => sl.id === id);
+              if (idx !== -1) this.$set(this.heroSlides, idx, { id, ...payload, order });
+              this.isSavingSlide = false;
+              this.closeSlideModal();
+              this.scheduleHeroAutoplay();
+            })
+            .catch(err => {
+              this.isSavingSlide = false;
+              this.slideFormError = `Errore durante il salvataggio: ${err.message}`;
+            });
+      } else {
+        const order = this.heroSlides.length;
+        db.collection('heroSlides').add({ ...payload, order })
+            .then(docRef => {
+              this.heroSlides.push({ id: docRef.id, ...payload, order });
+              this.isSavingSlide = false;
+              this.closeSlideModal();
+              this.scheduleHeroAutoplay();
+            })
+            .catch(err => {
+              this.isSavingSlide = false;
+              this.slideFormError = `Errore durante il salvataggio: ${err.message}`;
+            });
+      }
+    },
+    deleteSlide(slideId) {
+      if (!confirm('Eliminare definitivamente questa slide?')) return;
+      db.collection('heroSlides').doc(slideId).delete()
+          .then(() => {
+            this.heroSlides = this.heroSlides.filter(sl => sl.id !== slideId);
+            this.heroIndex = 0;
+            this.saveSlideOrder();
+            this.scheduleHeroAutoplay();
+          })
+          .catch(err => alert(`Errore: ${err.message}`));
+    },
+    toggleSlideActive(slide) {
+      const newValue = slide.active === false;
+      db.collection('heroSlides').doc(slide.id).update({ active: newValue })
+          .then(() => {
+            const idx = this.heroSlides.findIndex(sl => sl.id === slide.id);
+            if (idx !== -1) this.$set(this.heroSlides[idx], 'active', newValue);
+            this.heroIndex = 0;
+            this.scheduleHeroAutoplay();
+          })
+          .catch(err => alert(`Errore: ${err.message}`));
+    },
+    saveSlideOrder() {
+      if (!this.heroSlides.length) return;
+      const batch = db.batch();
+      this.heroSlides.forEach((slide, i) => {
+        slide.order = i;
+        batch.update(db.collection('heroSlides').doc(slide.id), { order: i });
+      });
+      batch.commit()
+          .then(() => {
+            this.heroIndex = 0;
+            this.scheduleHeroAutoplay();
+          })
+          .catch(err => alert(`Errore nel salvataggio dell'ordine: ${err.message}`));
     },
 
     // --- Authentication (Firebase) ---
@@ -1369,11 +1848,13 @@ export default {
     this.fetchImages();
     this.fetchAboutContent();
     this.fetchAboutImages();
+    this.fetchHeroSlides();
   },
   mounted() {
     window.addEventListener('scroll', this.handleScroll);
     window.addEventListener('resize', this.onViewportChange);
     window.addEventListener('orientationchange', this.onViewportChange);
+    document.addEventListener('visibilitychange', this.onHeroVisibilityChange);
   },
   updated() {
     this.checkImagesLoaded();
@@ -1382,6 +1863,8 @@ export default {
     window.removeEventListener('scroll', this.handleScroll);
     window.removeEventListener('resize', this.onViewportChange);
     window.removeEventListener('orientationchange', this.onViewportChange);
+    document.removeEventListener('visibilitychange', this.onHeroVisibilityChange);
+    this.stopHeroAutoplay();
     this.unlockBodyScroll();
   }
 }
@@ -2680,5 +3163,438 @@ footer {
 .section-image-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* === Hero Slider === */
+.hero-slider {
+  position: relative;
+  width: 100%;
+  height: clamp(340px, 46vw, 560px);
+  overflow: hidden;
+  background-color: #2b2b2b;
+}
+
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 680px;
+  padding: 0 clamp(1.5rem, 7vw, 5.5rem);
+  color: #fff;
+  text-align: left;
+  animation: heroContentIn 0.9s ease both;
+}
+
+@keyframes heroContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero-title {
+  font-size: clamp(1.7rem, 4.2vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 0.6rem;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+}
+
+.hero-subtitle {
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.hero-description {
+  font-size: clamp(0.95rem, 1.7vw, 1.1rem);
+  line-height: 1.5;
+  margin-bottom: 1.4rem;
+  max-width: 560px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+
+.hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 1.2rem;
+}
+
+.hero-cta-button {
+  display: inline-block;
+  background-color: #e4767f;
+  color: #fff;
+  border: none;
+  padding: 0.85rem 1.9rem;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: bold;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.hero-cta-button:hover {
+  background-color: #df565e;
+  transform: translateY(-2px);
+}
+
+.hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.hero-arrow .v-icon {
+  color: #fff;
+  font-size: 30px;
+}
+
+.hero-arrow:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.hero-arrow-left {
+  left: 16px;
+}
+
+.hero-arrow-right {
+  right: 16px;
+}
+
+.hero-dots {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+}
+
+.hero-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.hero-dot.active {
+  background: #e4767f;
+  border-color: #fff;
+  transform: scale(1.25);
+}
+
+.hero-manage-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.3s ease;
+}
+
+.hero-manage-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.hero-manage-btn .v-icon {
+  color: #fff;
+  font-size: 16px;
+}
+
+/* Hero transitions */
+.hero-fade-enter-active,
+.hero-fade-leave-active {
+  transition: opacity 0.9s ease;
+}
+
+.hero-fade-enter,
+.hero-fade-leave-to {
+  opacity: 0;
+}
+
+.hero-slide-next-enter-active,
+.hero-slide-next-leave-active,
+.hero-slide-prev-enter-active,
+.hero-slide-prev-leave-active {
+  transition: transform 0.7s cubic-bezier(0.25, 0.8, 0.35, 1);
+}
+
+.hero-slide-next-enter {
+  transform: translateX(100%);
+}
+
+.hero-slide-next-leave-to {
+  transform: translateX(-100%);
+}
+
+.hero-slide-prev-enter {
+  transform: translateX(-100%);
+}
+
+.hero-slide-prev-leave-to {
+  transform: translateX(100%);
+}
+
+@media (max-width: 768px) {
+  .hero-slider {
+    height: clamp(380px, 62vw, 460px);
+  }
+
+  .hero-content {
+    max-width: 100%;
+    padding: 0 1.4rem;
+  }
+
+  .hero-arrow {
+    width: 38px;
+    height: 38px;
+  }
+
+  .hero-arrow-left {
+    left: 8px;
+  }
+
+  .hero-arrow-right {
+    right: 8px;
+  }
+
+  .hero-cta-button {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-content {
+    padding-bottom: 3.2rem;
+  }
+
+  .hero-arrow {
+    top: auto;
+    bottom: 12px;
+    transform: none;
+    width: 34px;
+    height: 34px;
+  }
+
+  .hero-arrow .v-icon {
+    font-size: 24px;
+  }
+
+  .hero-arrow-left {
+    left: 12px;
+  }
+
+  .hero-arrow-right {
+    right: 12px;
+  }
+
+  .hero-dots {
+    bottom: 22px;
+  }
+}
+
+/* === Hero Slider Admin === */
+.manage-slider-container {
+  padding: 3rem 5%;
+  max-width: 900px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.manage-slider-container .editor-hint {
+  color: #6b6b6b;
+  margin-bottom: 1.5rem;
+}
+
+.slider-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.slide-admin-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.slide-admin-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #fff;
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07);
+  text-align: left;
+  flex-wrap: wrap;
+}
+
+.slide-admin-item.inactive {
+  opacity: 0.55;
+}
+
+.slide-admin-item .drag-handle {
+  cursor: grab;
+}
+
+.slide-admin-thumb {
+  width: 96px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.slide-admin-info {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slide-admin-meta {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.slide-active-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.slide-active-toggle input {
+  accent-color: #e4767f;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Slide modal */
+.slide-modal {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.slide-image-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 0.6rem;
+}
+
+.cta-editor-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.cta-editor-row input,
+.cta-editor-row select {
+  padding: 0.55rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+.cta-remove-btn {
+  background: #f1f1f1;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.cta-remove-btn:hover {
+  background: #e4767f;
+}
+
+.cta-remove-btn:hover .v-icon {
+  color: #fff;
+}
+
+.slide-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem 1rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 560px) {
+  .cta-editor-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .slide-config-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

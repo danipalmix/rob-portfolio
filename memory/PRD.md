@@ -35,6 +35,14 @@ Vincoli: font Nunito, testo #393939, nessuna regressione desktop, accessibilità
 10. Editor "Immagini tra i paragrafi" in About Me (admin): 4 slot, upload/sostituisci/rimuovi, alt text, salvataggio batch in `aboutSectionImages`, figure responsive per i visitatori
 - Font Nunito globale, testi #393939, compressImage NON modificata (richiesta utente)
 
+## Implementato (05/06/2026) — Hero Slider homepage ✅ (iteration_3, 11/12 pass, prod DB pulito)
+- Hero slider full-width (NON 100vh, height clamp 340-560px) subito sotto l'header (header INVARIATO), visibile solo se esistono slide attive
+- Ogni slide: immagine sfondo (base64 via compressImage, come portfolio), titolo, sottotitolo, testo descrittivo, CTA multiple (interna → changePage / esterna → target=_blank), overlay configurabile (scuro/gradiente/nessuno + intensità 0-90%), transizione fade o slide, durata 2-30s (default 6s)
+- Navigazione: autoplay (pausa su hover/tab nascosta), frecce, pallini, swipe touch; su ≤480px frecce spostate in basso e ridotte
+- Admin: pagina "Gestione Slider" (sidenav, solo admin) con lista draggable (riordino → batch order), toggle attiva/disattiva, modifica, elimina (confirm), modale add/edit con validazioni (immagine obbligatoria, label CTA, URL esterni http/https); pulsante "Gestisci slider" overlay su hero per admin
+- Firestore: nuova collezione `heroSlides` (title, subtitle, description, src base64, active, order, duration, transition, overlay, overlayOpacity, ctas[])
+- Nota test: errore validazione URL non intercettato in un run automatico (probabile click su bottone disabilitato durante compressione img) ma slide invalida correttamente NON salvata; caso "senza immagine" mostra errore correttamente
+
 ## Credenziali
 - Admin: rophil.art@gmail.com / RobAdmin2025! (vedi memory/test_credentials.md)
 
