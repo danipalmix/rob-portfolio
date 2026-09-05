@@ -1,0 +1,64 @@
+{
+  "summary": "End-to-end frontend testing of the new home/Portfolio split + vertical hero transitions + bottom-center CTAs + full-image (contain) hero + red 'Elimina Slide' button in the RoPhil Portfolio Vue2 app. Ran against http://localhost:3000 with the real admin credentials on LIVE Firestore (project rob-portfolio-bdba9). 13/13 test scenarios executed. All required behaviors PASSED. The two TEST_Slide_A / TEST_Slide_B docs created in the heroSlides collection were both deleted at the end; the 3 pre-existing production slides remain untouched and the run ended logged out. Only caveats: (1) the home-empty fallback (data-testid=home-empty + 'Vai al Portfolio' button) could not be directly observed because the production heroSlides collection is NOT empty (3 baseline slides live there), but the code path (v-if=\"currentPage === 'home' && !currentHeroSlide\") is straightforward and the button calls changePage('portfolio') — inspected in source at lines 134–140 of rob-portfolio.vue. (2) The 'red pill' delete button is computed rgb(228,118,127) which is a coral/salmon red rather than a pure crimson red — still clearly red-ish/pinkish with a white mdi-trash-can-outline icon and 20px border-radius; cosmetic only.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Gestione Slider — Elimina Slide button",
+        "issues": [
+          "The 'red pill' delete button background is rgb(228,118,127) — a soft coral/salmon rather than a strong red. Still clearly distinct from the neutral 'Modifica' button and has the mdi-trash-can-outline icon + border-radius 20px, so functionally prominent, but visually less 'destructive-red' than typical delete affordances. Consider #d32f2f / #e53935 for a more conventional destructive tone."
+        ]
+      },
+      {
+        "screen": "Hero — Autoplay UX",
+        "issues": [
+          "Slider still pauses on any mouseenter of the hero root (verified: mouse must be outside the hero region for auto-advance). Intentional but a desktop visitor whose cursor rests on the hero will never see auto-advance. Consider resuming after 2–3s of no interaction, or pausing only on hover of arrows/dots."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional / cosmetic) Deepen the red of .slide-delete-btn to a more conventional destructive tone (e.g. #d32f2f).",
+    "(Optional) Add a manual admin-only way to preview the 'home-empty' fallback state (e.g. a debug flag), since production heroSlides is always non-empty and the state is hard to reach in QA.",
+    "(Carried over from iter 3, still valid) Consider only pausing autoplay on hover of arrows/dots instead of the entire hero.",
+    "(Carried over) rob-portfolio.vue is now 3722 lines — split into HeroSlider.vue, SlideModal.vue, ManageSlider.vue, PortfolioGrid.vue, AdminSections, etc.",
+    "(Carried over) Replace window.alert / window.confirm with the existing sweetalert2/toast system already in package.json."
+  ],
+  "critical_code_review_comments": [
+    "rob-portfolio.vue is 3722 lines — well over the 700-line guideline. Extract HeroSlider, SlideModal, ManageSliderAdmin, PortfolioGrid, LoginForm as separate SFCs.",
+    "goToHeroSlide vertical transition mapping (lines 1042–1045) correctly picks hero-slide-up/hero-slide-down based on direction. Verified during test.",
+    "The Vue <transition name=heroTransitionName> pattern couples the transition CSS class name to the current slide's chosen transition. Works fine, but this means back-navigation (prev-arrow while current slide's transition is slide-up) uses hero-slide-down — the direction is derived from the arrow, not the slide. Confirmed correct behavior in test (both hero-slide-down-enter-active AND hero-slide-down-leave-active classes captured on prev click).",
+    "compressImage still writes the base64 into a Firestore doc — for portrait 600x900 sample it fit fine, but a real photographer's high-res portrait could easily exceed the 1MB Firestore doc limit. Migrate to Firebase Storage URLs.",
+    "The 'home-empty' fallback has no data-testid on the paragraph/text, only on the section; adding a data-testid on the heading/description would help future negative-path testing.",
+    "The delete confirmation still uses window.confirm() (not a styled modal); jarring vs. the rest of the UI which uses custom modals.",
+    "Sidenav is not marked with a stable data-testid on the container — tests must query '.sidenav a' by text. Consider adding data-testid=\"sidenav\" and per-link testids for stability."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (Firebase-only backend, no local backend service)",
+    "frontend": "100% of directly-testable scenarios (13/13). The 'home-empty' fallback was code-inspected but not runtime-observed because production DB has 3 existing slides — cannot be tested without deleting production data."
+  },
+  "test_credentials": "rophil.art@gmail.com / RobAdmin2025! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created 2 test heroSlides docs during the run: TEST_Slide_A (portrait 600x900 JPG, transition=slide-up, internal CTA→portfolio) and TEST_Slide_B (landscape 800x450 JPG, transition=slide-down, external CTA→https://www.google.com). BOTH DELETED at end of run via the 'Elimina Slide' pill button. Verified 3 baseline production slides remain and heroSlides has NO 'TEST_Slide' docs leaked.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Frontend served by supervisor 'frontend' on port 3000 (yarn start / vue-cli-service). Live Firestore project rob-portfolio-bdba9 is used; ONLY the heroSlides collection may be touched, and every created doc MUST be deleted before finishing. Login uses window.alert('...'), deleteSlide uses window.confirm — always register page.on('dialog', ...) that accepts. Firebase auth persistence is IndexedDB-per-context, so each new mcp_browser_automation session starts logged out. Login can take 5–15s (Firestore Listen channel occasionally ERR_ABORTED but the sign-in itself succeeds). To reach a specific slide in the hero, iterate hero-dot-{i} and read [data-testid=hero-title]; note slides without a title do not render the hero-title element. Move mouse to (5,5) BEFORE any autoplay wait — mouseenter on hero pauses autoplay by design. Baseline DB now: 3 slides (order 0='titolo' [Dissolvenza], order 1='' [Dissolvenza], order 2='' [Scorrimento orizz.]).",
+  "detailed_test_results": {
+    "1_home_default_+_empty_fallback": "PARTIAL — home is the default page ✓; hero-slider rendered (production DB non-empty), so the home-empty fallback with 'Vai al Portfolio' could not be runtime-observed. Code path verified in source.",
+    "2_sidenav_home_+_portfolio_+_logo": "PASS — nav-home-link and nav-portfolio-link present in .sidenav, both navigate correctly to their pages.",
+    "3_admin_login_alert_+_home_+_manage_link_+_hero_manage_btn": "PASS — alert 'Login effettuato con successo come Admin!' fired, landed on home, manage-slider-link visible in sidenav, hero-manage-button visible on hero.",
+    "4_create_2_test_slides_incl_4_transition_options": "PASS — transition select had all 4 options (fade, slide, slide-up, slide-down). Slide A (600x900 portrait, transition=slide-up, internal CTA→portfolio) saved. Slide B (800x450 landscape, transition=slide-down, external CTA https://www.google.com) saved. Waited for image compression (save button back to 'Salva Slide') before submit.",
+    "5_hero_shows_full_image_contain_+_blurred_fill": "PASS — [data-testid=hero-slide-image] computed background-size = 'contain'; .hero-slide-blur present behind. Portrait 600x900 image visible ENTIRELY with no cropping on both desktop 1440x900 and mobile 390x844.",
+    "6_CTA_bottom_center": "PASS — .hero-ctas horizontally centered (Δ 0px on desktop, Δ 0px on mobile); bottom offset from hero bottom ≈ 58px on desktop, ≈ 78px on mobile (well within the bottom 35% of the hero).",
+    "7_vertical_transitions_animation_classes": "PASS — clicking next/prev arrows toward TEST_Slide_A/B applied Vue transition classes hero-slide-down-enter-active / hero-slide-down-enter-to / hero-slide-down-leave-active / hero-slide-down-leave-to (captured within a 1s polling window). Navigation via arrows and dots works both directions.",
+    "8_internal_CTA_navigates_to_portfolio": "PASS — clicking [data-testid=hero-cta-button-0] on TEST_Slide_A navigated to the Portfolio page (.portfolio-section rendered).",
+    "9_external_CTA_target_blank_+_href": "PASS — CTA on TEST_Slide_B is <a> with target=_blank and href=https://www.google.com and rel=noopener noreferrer.",
+    "10_autoplay_advances_with_mouse_outside": "PASS — active dot changed 0 → 1 within an 8s wait after moving mouse to (5,5). Confirms the mouseenter pause fix reported in iter 3.",
+    "11_red_elimina_slide_button_+_transition_meta_labels": "PASS (with cosmetic note) — [data-testid=slide-delete-button-*] rendered with bg=rgb(228,118,127), border-radius=20px, contains i.mdi-trash-can-outline icon, text='Elimina Slide'. Color is more coral/salmon than pure red — cosmetic. Meta line shows 'Scorrimento ↑' for slide-up and 'Scorrimento ↓' for slide-down.",
+    "12_mobile_390x844_layout": "PASS — hero shown, image fully visible (background-size=contain), CTA horizontally centered near bottom (y=442/hero-bottom=567), prev arrow at (12,521) and next arrow at (344,521): both at bottom corners, both do NOT overlap CTA horizontally or vertically, and both sit above the footer.",
+    "13_cleanup_+_logout": "PASS — both TEST_Slide_A and TEST_Slide_B deleted via slide-delete-button-{id} (window.confirm auto-accepted). Verified heroSlides has 3 remaining production slides and 0 TEST_Slide docs leaked. Logout link clicked; manage-slider-link no longer visible in sidenav afterward."
+  }
+}

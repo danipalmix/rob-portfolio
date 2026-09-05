@@ -1,7 +1,7 @@
 <template>
   <div class="portfolio-container">
     <header class="top-navbar">
-      <button class="logo-button-left" @click.prevent="changePage('portfolio')" aria-label="Vai al portfolio">
+      <button class="logo-button-left" @click.prevent="changePage('home')" aria-label="Vai alla home">
         <span class="logo-pill">
           <img src="../assets/Logo_rob1.png" alt="Logo Roberta" class="logo" />
         </span>
@@ -35,7 +35,8 @@
     <aside :class="['sidenav', { 'is-open': navOpen }]">
       <nav>
         <ul>
-          <li><a href="#" @click.prevent="changePage('portfolio')">Portfolio</a></li>
+          <li><a href="#" @click.prevent="changePage('home')" data-testid="nav-home-link">Home</a></li>
+          <li><a href="#" @click.prevent="changePage('portfolio')" data-testid="nav-portfolio-link">Portfolio</a></li>
           <li><a href="#" @click.prevent="changePage('about')">About Me</a></li>
           <!-- <li><a href="#" @click.prevent="changePage('my-projects')">My Projects</a></li> -->
           <li v-if="isAdmin"><a href="#" @click.prevent="changePage('manage-categories')">Gestione Categorie</a></li>
@@ -57,7 +58,7 @@
     <div :class="['main-content-wrapper', { 'shifted': navOpen }]">
 
       <section
-        v-if="currentPage === 'portfolio' && currentHeroSlide"
+        v-if="currentPage === 'home' && currentHeroSlide"
         class="hero-slider"
         data-testid="hero-slider"
         aria-roledescription="carousel"
@@ -71,15 +72,17 @@
           <div
             :key="currentHeroSlide.id"
             class="hero-slide"
-            :style="{ backgroundImage: `url(${currentHeroSlide.src})` }"
             data-testid="hero-slide"
           >
+            <div class="hero-slide-blur" :style="{ backgroundImage: `url(${currentHeroSlide.src})` }"></div>
+            <div class="hero-slide-img" :style="{ backgroundImage: `url(${currentHeroSlide.src})` }" data-testid="hero-slide-image"></div>
             <div class="hero-overlay" :style="heroOverlayStyle(currentHeroSlide)"></div>
             <div class="hero-content">
               <h2 v-if="currentHeroSlide.title" class="hero-title" data-testid="hero-title">{{ currentHeroSlide.title }}</h2>
               <p v-if="currentHeroSlide.subtitle" class="hero-subtitle" data-testid="hero-subtitle">{{ currentHeroSlide.subtitle }}</p>
               <p v-if="currentHeroSlide.description" class="hero-description" data-testid="hero-description">{{ currentHeroSlide.description }}</p>
-              <div v-if="currentHeroSlide.ctas && currentHeroSlide.ctas.length" class="hero-ctas">
+            </div>
+            <div v-if="currentHeroSlide.ctas && currentHeroSlide.ctas.length" class="hero-ctas">
                 <template v-for="(cta, i) in currentHeroSlide.ctas">
                   <a
                     v-if="cta.linkType === 'external'"
@@ -99,7 +102,6 @@
                     @click="handleHeroCta(cta)"
                   >{{ cta.label }}</button>
                 </template>
-              </div>
             </div>
           </div>
         </transition>
@@ -127,6 +129,15 @@
         <button v-if="isAdmin" class="hero-manage-btn" @click="changePage('manage-slider')" data-testid="hero-manage-button">
           <v-icon small>mdi-pencil</v-icon> Gestisci slider
         </button>
+      </section>
+
+      <section v-if="currentPage === 'home' && !currentHeroSlide" class="home-empty" data-testid="home-empty">
+        <div class="empty-portfolio">
+          <h2>Benvenuto!</h2>
+          <p v-if="!isAdmin">I contenuti in evidenza arriveranno presto.</p>
+          <p v-else>Aggiungi la prima slide da "Gestione Slider" nel menu.</p>
+          <button class="cta-button" @click="changePage('portfolio')" data-testid="home-empty-portfolio-button">Vai al Portfolio</button>
+        </div>
       </section>
 
       <section v-if="currentPage === 'portfolio'" class="portfolio-section">
@@ -389,7 +400,7 @@
               <div class="slide-admin-info">
                 <strong>{{ slide.title || 'Senza titolo' }}</strong>
                 <span class="slide-admin-meta">
-                  {{ slide.transition === 'slide' ? 'Scorrimento' : 'Dissolvenza' }} ·
+                  {{ transitionLabel(slide.transition) }} ·
                   {{ slide.duration || 6 }}s ·
                   {{ (slide.ctas || []).length }} CTA ·
                   {{ slide.active === false ? 'Disattivata' : 'Attiva' }}
@@ -401,7 +412,9 @@
               </label>
               <div class="category-actions">
                 <button @click="openSlideModal(slide)" class="action-btn" :data-testid="`slide-edit-button-${slide.id}`">Modifica</button>
-                <button @click="deleteSlide(slide.id)" class="action-btn delete" :data-testid="`slide-delete-button-${slide.id}`">Elimina</button>
+                <button @click="deleteSlide(slide.id)" class="slide-delete-btn" :data-testid="`slide-delete-button-${slide.id}`">
+                  <v-icon small>mdi-trash-can-outline</v-icon> Elimina Slide
+                </button>
               </div>
             </li>
           </draggable>
@@ -554,7 +567,9 @@
               <label for="slideTransition">Transizione</label>
               <select id="slideTransition" v-model="editableSlide.transition" data-testid="slide-transition-select">
                 <option value="fade">Dissolvenza (fade)</option>
-                <option value="slide">Scorrimento (slide)</option>
+                <option value="slide">Scorrimento orizzontale</option>
+                <option value="slide-up">Scorrimento verso l'alto</option>
+                <option value="slide-down">Scorrimento verso il basso</option>
               </select>
             </div>
             <div class="form-group">
@@ -715,7 +730,7 @@ export default {
   data() {
     return {
       // UI State
-      currentPage: 'portfolio',
+      currentPage: 'home',
       navOpen: false,
       lightboxVisible: false,
       selectedImage: '',
@@ -872,7 +887,8 @@ export default {
     },
     heroInternalPages() {
       return [
-        { value: 'portfolio', label: 'Portfolio (Home)' },
+        { value: 'home', label: 'Home' },
+        { value: 'portfolio', label: 'Portfolio' },
         { value: 'about', label: 'About Me' },
         { value: 'contact', label: 'Contact Me' }
       ];
@@ -1003,7 +1019,7 @@ export default {
     },
     scheduleHeroAutoplay() {
       this.stopHeroAutoplay();
-      if (this.currentPage !== 'portfolio') return;
+      if (this.currentPage !== 'home') return;
       if (this.heroPaused || document.hidden) return;
       if (this.activeSlides.length < 2) return;
       const slide = this.currentHeroSlide;
@@ -1020,8 +1036,16 @@ export default {
       }
       const dir = direction || (idx > this.safeHeroIndex ? 'next' : 'prev');
       const target = this.activeSlides[idx];
-      const type = target && target.transition === 'slide' ? 'slide' : 'fade';
-      this.heroTransitionName = type === 'fade' ? 'hero-fade' : (dir === 'prev' ? 'hero-slide-prev' : 'hero-slide-next');
+      const type = target ? target.transition : 'fade';
+      if (type === 'slide') {
+        this.heroTransitionName = dir === 'prev' ? 'hero-slide-prev' : 'hero-slide-next';
+      } else if (type === 'slide-up') {
+        this.heroTransitionName = dir === 'prev' ? 'hero-slide-down' : 'hero-slide-up';
+      } else if (type === 'slide-down') {
+        this.heroTransitionName = dir === 'prev' ? 'hero-slide-up' : 'hero-slide-down';
+      } else {
+        this.heroTransitionName = 'hero-fade';
+      }
       this.heroIndex = idx;
       this.scheduleHeroAutoplay();
     },
@@ -1068,6 +1092,12 @@ export default {
         };
       }
       return { background: `rgba(0,0,0,${op})` };
+    },
+    transitionLabel(t) {
+      if (t === 'slide') return 'Scorrimento orizz.';
+      if (t === 'slide-up') return 'Scorrimento ↑';
+      if (t === 'slide-down') return 'Scorrimento ↓';
+      return 'Dissolvenza';
     },
     handleHeroCta(cta) {
       this.changePage(cta.page || 'portfolio');
@@ -1148,7 +1178,7 @@ export default {
         src: s.src,
         active: s.active !== false,
         duration: Math.min(30, Math.max(2, Number(s.duration) || 6)),
-        transition: s.transition === 'slide' ? 'slide' : 'fade',
+        transition: ['fade', 'slide', 'slide-up', 'slide-down'].includes(s.transition) ? s.transition : 'fade',
         overlay: ['dark', 'gradient', 'none'].includes(s.overlay) ? s.overlay : 'dark',
         overlayOpacity: Math.min(90, Math.max(0, Number(s.overlayOpacity) || 0)),
         ctas: s.ctas.map(c => ({
@@ -1234,7 +1264,7 @@ export default {
           .then(doc => {
             if (doc.exists) {
               alert('Login effettuato con successo come Admin!');
-              this.changePage('portfolio');
+              this.changePage('home');
             } else {
               auth.signOut();
               alert('Login riuscito, ma non hai i privilegi di amministratore.');
@@ -3169,7 +3199,7 @@ footer {
 .hero-slider {
   position: relative;
   width: 100%;
-  height: clamp(340px, 46vw, 560px);
+  height: clamp(380px, 66vh, 700px);
   overflow: hidden;
   background-color: #2b2b2b;
 }
@@ -3177,25 +3207,44 @@ footer {
 .hero-slide {
   position: absolute;
   inset: 0;
-  background-size: cover;
-  background-position: center;
   display: flex;
   align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hero-slide-blur {
+  position: absolute;
+  inset: -24px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(22px) brightness(0.75);
+  transform: scale(1.08);
+}
+
+.hero-slide-img {
+  position: absolute;
+  inset: 0;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 1;
 }
 
 .hero-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
 .hero-content {
   position: relative;
-  z-index: 2;
-  max-width: 680px;
-  padding: 0 clamp(1.5rem, 7vw, 5.5rem);
+  z-index: 3;
+  max-width: 760px;
+  padding: 0 clamp(1.5rem, 6vw, 4rem) 4.5rem;
   color: #fff;
-  text-align: left;
+  text-align: center;
   animation: heroContentIn 0.9s ease both;
 }
 
@@ -3228,16 +3277,23 @@ footer {
 .hero-description {
   font-size: clamp(0.95rem, 1.7vw, 1.1rem);
   line-height: 1.5;
-  margin-bottom: 1.4rem;
+  margin: 0 auto 1.4rem;
   max-width: 560px;
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
 }
 
 .hero-ctas {
+  position: absolute;
+  bottom: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.9rem;
-  margin-top: 1.2rem;
+  width: max-content;
+  max-width: 92%;
 }
 
 .hero-cta-button {
@@ -3387,9 +3443,46 @@ footer {
   transform: translateX(100%);
 }
 
+.hero-slide-up-enter-active,
+.hero-slide-up-leave-active,
+.hero-slide-down-enter-active,
+.hero-slide-down-leave-active {
+  transition: transform 0.7s cubic-bezier(0.25, 0.8, 0.35, 1);
+}
+
+.hero-slide-up-enter {
+  transform: translateY(100%);
+}
+
+.hero-slide-up-leave-to {
+  transform: translateY(-100%);
+}
+
+.hero-slide-down-enter {
+  transform: translateY(-100%);
+}
+
+.hero-slide-down-leave-to {
+  transform: translateY(100%);
+}
+
+.home-empty {
+  padding: 3rem 5%;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.home-empty .empty-portfolio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
 @media (max-width: 768px) {
   .hero-slider {
-    height: clamp(380px, 62vw, 460px);
+    height: clamp(400px, 58vh, 560px);
   }
 
   .hero-content {
@@ -3418,7 +3511,11 @@ footer {
 
 @media (max-width: 480px) {
   .hero-content {
-    padding-bottom: 3.2rem;
+    padding-bottom: 5.5rem;
+  }
+
+  .hero-ctas {
+    bottom: 78px;
   }
 
   .hero-arrow {
@@ -3530,6 +3627,31 @@ footer {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+.slide-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #e4767f;
+  color: #fff;
+  border: none;
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.slide-delete-btn .v-icon {
+  color: #fff;
+  font-size: 16px;
+}
+
+.slide-delete-btn:hover {
+  background-color: #da5863;
 }
 
 /* Slide modal */

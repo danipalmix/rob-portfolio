@@ -43,6 +43,14 @@ Vincoli: font Nunito, testo #393939, nessuna regressione desktop, accessibilità
 - Firestore: nuova collezione `heroSlides` (title, subtitle, description, src base64, active, order, duration, transition, overlay, overlayOpacity, ctas[])
 - Nota test: errore validazione URL non intercettato in un run automatico (probabile click su bottone disabilitato durante compressione img) ma slide invalida correttamente NON salvata; caso "senza immagine" mostra errore correttamente
 
+## Implementato (05/06/2026 — iterazione 2) — Home solo hero + nuove opzioni ✅ (iteration_4, 13/13 pass)
+- Homepage ('home', default) contiene SOLO l'hero slider; il portfolio è ora una pagina separata "Portfolio" nel menu (come About Me/Contact Me); logo → Home; fallback di benvenuto se nessuna slide attiva (home-empty)
+- Nuove transizioni verticali: "Scorrimento verso l'alto" (slide-up) e "verso il basso" (slide-down), oltre a fade e scorrimento orizzontale; direzione invertita su navigazione prev
+- CTA posizionate in basso al centro della slide (assolute, sopra i pallini)
+- Immagine slide mostrata INTERA senza tagli (background-size: contain) su livello di riempimento sfocato (.hero-slide-blur); hero più alto (clamp 380px-66vh-700px)
+- Pulsante "Elimina Slide" evidente (pill rosa/corallo #e4767f con icona cestino) in Gestione Slider
+- Nota: nel DB di produzione l'utente ha già inserito 3 slide reali
+
 ## Credenziali
 - Admin: rophil.art@gmail.com / RobAdmin2025! (vedi memory/test_credentials.md)
 
